@@ -16,8 +16,28 @@
             </div>
           </div>
           <svg ref="svgRef" class="w-full bg-slate-900 rounded" style="height:460px"></svg>
+          <p class="text-[10px] text-slate-500 mt-2">点击图谱节点可查看所属词条详情</p>
         </div>
-        <div class="space-y-4">
+        <EntryDetailPanel v-if="store.panelMode === 'detail'" />
+        <div v-else class="space-y-4">
+          <div class="bg-slate-800 rounded-lg p-4 border border-slate-700">
+            <h3 class="text-sm font-bold text-slate-400 mb-3">词条列表</h3>
+            <div class="space-y-1 max-h-64 overflow-y-auto pr-1">
+              <button
+                v-for="cs in store.filteredCognates"
+                :key="cs.root"
+                class="w-full text-left px-2 py-1.5 rounded bg-slate-900 hover:bg-slate-700 flex items-center gap-2"
+                @click="store.openEntry(cs.root)"
+              >
+                <span class="font-mono font-bold text-cyan-300 text-xs">{{ cs.root }}</span>
+                <span class="text-xs text-slate-400 flex-1 truncate">{{ cs.meaning }}</span>
+                <span v-if="entryFlags(cs.root).missing" class="text-[10px] px-1 rounded bg-amber-900/50 text-amber-300">缺项×{{ entryFlags(cs.root).missing }}</span>
+                <span v-if="entryFlags(cs.root).gap" class="text-[10px] px-1 rounded bg-red-900/50 text-red-300">断档</span>
+                <span v-if="entryFlags(cs.root).partial" class="text-[10px] px-1 rounded bg-slate-700 text-slate-300">部分收录</span>
+              </button>
+              <div v-if="!store.filteredCognates.length" class="text-xs text-slate-500 py-3 text-center">无匹配词条</div>
+            </div>
+          </div>
           <div class="bg-slate-800 rounded-lg p-4 border border-slate-700">
             <h3 class="text-sm font-bold text-slate-400 mb-3">语系概览</h3>
             <div class="space-y-2">
@@ -26,11 +46,6 @@
                 <div><div class="font-bold">{{ f.name }}</div><div class="text-xs text-slate-500">{{ f.era }} · {{ f.languages.join('/') }}</div></div>
               </div>
             </div>
-          </div>
-          <div v-if="store.selectedNode" class="bg-slate-800 rounded-lg p-4 border border-slate-700">
-            <h3 class="text-sm font-bold text-slate-400 mb-2">选中节点</h3>
-            <div class="text-lg font-bold text-cyan-400">{{ store.selectedNode.word }}</div>
-            <div class="text-sm text-slate-400">{{ store.selectedNode.language }} — {{ store.selectedNode.meaning }}</div>
           </div>
           <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 text-xs text-slate-400">
             <h3 class="text-sm font-bold text-slate-400 mb-2">Grimm定律</h3>
@@ -66,7 +81,13 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="cs in store.filteredCognates" :key="cs.root" class="border-t border-slate-700 hover:bg-slate-700">
+              <tr
+                v-for="cs in store.filteredCognates"
+                :key="cs.root"
+                class="border-t border-slate-700 hover:bg-slate-700 cursor-pointer"
+                title="点击查看词条详情"
+                @click="store.openEntry(cs.root)"
+              >
                 <td class="px-2 py-1.5 font-mono text-slate-200 font-bold">{{ cs.root }}</td>
                 <td class="px-2 py-1.5 text-slate-400">{{ cs.meaning }}</td>
                 <td class="px-2 py-1.5 font-mono text-cyan-300">{{ cs.languages['英语'] || '—' }}</td>
@@ -88,10 +109,22 @@
 import { ref, onMounted } from 'vue'
 import * as d3 from 'd3'
 import { useEtymologyStore, LANGUAGE_FAMILIES } from './store/etymology'
+import { ENTRY_DETAILS } from './mock/details'
+import EntryDetailPanel from './components/EntryDetailPanel.vue'
 
 const store = useEtymologyStore()
 const svgRef = ref<SVGSVGElement | null>(null)
 const COLORS: Record<string, string> = { ie: '#3b82f6', st: '#22c55e', aa: '#f59e0b', ural: '#8b5cf6' }
+
+/** 列表行的缺陷标记（缺项数 / 断档 / 部分收录），来自词条元数据 */
+function entryFlags(root: string) {
+  const d = ENTRY_DETAILS[root]
+  return {
+    missing: d?.missingLanguages.length ?? 0,
+    gap: !!d?.pathGap,
+    partial: !!d?.partialCoverage,
+  }
+}
 
 function drawGraph() {
   if (!svgRef.value) return
@@ -110,11 +143,12 @@ function drawGraph() {
   const link = g.append('g').selectAll('line').data(links).join('line')
     .attr('stroke', '#475569').attr('stroke-width', 1).attr('opacity', 0.5)
   const node = g.append('g').selectAll('g').data(nodes).join('g')
+    .style('cursor', 'pointer')
     .call(d3.drag<any, any>()
       .on('start', (e, d: any) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y })
       .on('drag', (e, d: any) => { d.fx = e.x; d.fy = e.y })
       .on('end', (e, d: any) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null }))
-    .on('click', (_: any, d: any) => { store.selectedNode = d })
+    .on('click', (_: any, d: any) => { store.selectGraphNode(d) })
   node.append('circle')
     .attr('r', (d: any) => d.language === 'Proto-IE' ? 12 : 7)
     .attr('fill', (d: any) => COLORS[d.family] || '#64748b')
