@@ -1,4 +1,4 @@
-import type { CognateSet, LanguageFamily } from '../types'
+import type { CognateSet, EntryDetail, LanguageFamily, PartialFormNote, PathBreakNote } from '../types'
 
 export const LANGUAGE_FAMILIES: LanguageFamily[] = [
   { id: 'ie', name: '印欧语系', color: '#3b82f6', languages: ['英语','法语','德语','西班牙语','俄语','拉丁语'], era: '公元前4000年' },
@@ -39,4 +39,79 @@ export function buildGraph() {
     })
   })
   return { nodes, links }
+}
+
+// ---- 词条详情：缺项原因 / 来源路径断档 / 部分词形收录说明 ----
+
+const MISSING_REASONS: Record<string, string> = {
+  '法语': '法语继承形式在早期文献中缺载，暂无可靠词形记录',
+  '西班牙语': '西班牙语该词形未见于收录语料，属语种缺项',
+  '俄语': '俄语对应词形暂未收录进本数据集',
+  '拉丁语': '拉丁语该词形仅存于残篇，未正式收录',
+  '德语': '德语对应词形暂未收录进本数据集',
+  '英语': '英语对应词形暂未收录进本数据集',
+}
+
+const PATH_BREAKS: Record<string, PathBreakNote[]> = {
+  '*h₂épo': [
+    { from: 'PIE *h₂épo', to: '英语 aqua', reason: 'aqua 为拉丁语借词；日耳曼本源形态 *ahwō 与 PIE 之间的谱系记录缺失，来源路径在此中断' },
+  ],
+  '*dʰómos': [
+    { from: '拉丁语 domus', to: '法语 maison', reason: 'maison 源自拉丁语 mansio（停留），替换了 domus 的继承形式，继承链断档' },
+  ],
+  '*pṓtr': [
+    { from: 'PIE *pṓtr', to: '俄语 отец', reason: 'отец 源自原始斯拉夫语 *otьcь，与 *pṓtr 之间的中间形态未留存，路径断档' },
+  ],
+  '*gʷen-': [
+    { from: 'PIE *gʷen-', to: '德语 Frau', reason: 'Frau 源自 *frōwō（女主人），属语义替换，音系演化链中断' },
+  ],
+}
+
+const PARTIAL_FORMS: Record<string, PartialFormNote[]> = {
+  '*mātér': [{ language: '俄语', recorded: 'мать', note: '仅收录主格单数，变格词形未完整收录' }],
+  '*dʰómos': [{ language: '俄语', recorded: 'дом', note: '仅收录主格单数，变格词形未完整收录' }],
+  '*wḗdr̥': [{ language: '俄语', recorded: 'вода', note: '仅收录主格单数，变格词形未完整收录' }],
+  '*nokʷt-': [{ language: '拉丁语', recorded: 'nox', note: '仅收录主格单数；属格 noctis 等词形未收录' }],
+  '*sker-': [{ language: '德语', recorded: 'scheren', note: '仅收录不定式，过去时与过去分词缺载' }],
+  '*ed-': [{ language: '德语', recorded: 'essen', note: '仅收录不定式，人称变位缺载' }],
+}
+
+export function buildEntryDetail(root: string): EntryDetail | null {
+  const cs = COGNATE_SETS.find(c => c.root === root)
+  if (!cs) return null
+  const family = LANGUAGE_FAMILIES.find(f => f.id === cs.family)
+  const expected = family ? family.languages : Object.keys(cs.languages)
+  const missingLanguages = expected
+    .filter(lang => !cs.languages[lang])
+    .map(language => ({ language, reason: MISSING_REASONS[language] ?? '该语种暂无该词形的收录记录' }))
+  return {
+    root: cs.root,
+    meaning: cs.meaning,
+    period: cs.period,
+    family: cs.family,
+    forms: { ...cs.languages },
+    missingLanguages,
+    pathBreaks: PATH_BREAKS[cs.root] ?? [],
+    partialForms: PARTIAL_FORMS[cs.root] ?? [],
+    source: '《印欧语词源词典·样例数据集》',
+    updatedAt: '2026-09-01',
+  }
+}
+
+// 模拟异步详情接口：带网络延迟与随机失败，用于验证加载失败可重试
+export function fetchEntryDetail(root: string): Promise<EntryDetail> {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      const detail = buildEntryDetail(root)
+      if (!detail) {
+        reject(new Error(`未找到词条 ${root} 的详情`))
+        return
+      }
+      if (Math.random() < 0.3) {
+        reject(new Error('网络波动，词条详情加载失败，请重试'))
+        return
+      }
+      resolve(detail)
+    }, 300 + Math.random() * 400)
+  })
 }

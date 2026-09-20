@@ -15,3 +15,20 @@ export interface CognateSet {
 export interface LanguageFamily {
   id: string; name: string; color: string; languages: string[]; era: string
 }
+export interface MissingLanguageNote {
+  language: string; reason: string
+}
+export interface PathBreakNote {
+  from: string; to: string; reason: string
+}
+export interface PartialFormNote {
+  language: string; recorded: string; note: string
+}
+export interface EntryDetail {
+  root: string; meaning: string; period: string; family: string
+  forms: Record<string, string>
+  missingLanguages: MissingLanguageNote[]
+  pathBreaks: PathBreakNote[]
+  partialForms: PartialFormNote[]
+  source: string; updatedAt: string
+}
